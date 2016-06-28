@@ -1,0 +1,6 @@
+C2Grad.png
+Grayscale
+100
+214
+200
+214
