@@ -22,7 +22,7 @@ function varargout = LineDetection(varargin)
 
 % Edit the above text to modify the response to help LineDetection
 
-% Last Modified by GUIDE v2.5 06-Jul-2016 14:50:38
+% Last Modified by GUIDE v2.5 14-Jul-2016 17:40:53
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -56,8 +56,11 @@ set(gcf, 'WindowKeyPressFcn', @escPressed);
 set(gcf, 'WindowButtonDownFcn', @getLocation);
 pan off
 
-handles.current_image = 'Image.png';
-handles.image_type = 'RGB';
+current_folder = pwd;
+cfig_file = strcat(pwd,'/SavedConfigurations.txt');
+cid = fopen(cfig_file,'wt');
+fprintf(cid,'%20s    %5s   %11s    %9s    %11s    %13s    %50s\n','Image Name','Sigma','P','Q','Auto','Profile Width','Notes');
+fclose(cid);
 
 handles.p = [0; 0];
 handles.q = [0; 0];
@@ -69,6 +72,7 @@ handles.sigma0 = Inf;
 handles.customsigma0 = Inf;
 handles.sr = 0;
 handles.textoutput = '';
+handles.notes = '';
 handles.images = [];
 
 handles.imagewidth = 256;
@@ -84,14 +88,11 @@ handles.profilewidth = 31;
 handles.plots = [];
 handles.debugmode = false;
 handles.folder = '';
-%     guidata(hObject, handles);
-%     axes(handles.axes1);
-%     imshow(handles.current_image);
 
 fid = fopen('Image 1.txt', 'r');
 
 % Change values in text boxes.
-handles.current_image = fgetl(fid);
+handles.image_name = fgetl(fid);
 handles.image_type = fgetl(fid);
 
 handles.p(2) = str2double(fgetl(fid));
@@ -120,9 +121,11 @@ handles.n = 0;
 handles.profilenumber = 0;
 
 % Save the handles structure.
-guidata(hObject,handles)
+guidata(hObject,handles);
 
 axes(handles.axes1);
+handles.current_image = imread(handles.image_name);
+handles.current_image = imresize(handles.current_image,[256 256]);
 imshow(handles.current_image);
 hp = impixelinfo;
 set(hp,'Position',[5 1 300 20]);
@@ -173,7 +176,7 @@ filename = strcat(str{val}, '.txt');
 fid = fopen(filename, 'r');
 
 % Change values in text boxes.
-handles.current_image = fgetl(fid);
+handles.image_name = fgetl(fid);
 handles.image_type = fgetl(fid);
 
 handles.p(2) = str2double(fgetl(fid));
@@ -189,7 +192,7 @@ handles.q(1) = str2double(fgetl(fid));
 set(handles.edit2, 'string', num2str(handles.q(1)));
 
 fclose(fid);
-
+set(handles.edit10, 'string','');
 % Reset values
 handles.i = 0;
 handles.endofline = false;
@@ -204,9 +207,15 @@ handles.textoutput = '';
 
 
 % Save the handles structure.
-guidata(hObject,handles)
+guidata(hObject,handles);
 
 axes(handles.axes1);
+handles.current_image = imread(handles.image_name);
+handles.current_image = imresize(handles.current_image,[256 256]);
+handles.imagewidth = size(handles.current_image,2);
+handles.imageheight = size(handles.current_image,1);
+guidata(hObject,handles);
+cla(handles.axes1,'reset');
 imshow(handles.current_image);
 hold on
 plot([handles.p(2),handles.q(2)],[handles.p(1),handles.q(1)],':r*','LineWidth',1)
@@ -366,13 +375,11 @@ function pushbutton2_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
-
-% magnitudes and tangents
 switch handles.image_type
     case 'RGB'
-        I0 = double(rgb2gray(imread(handles.current_image)))/255;
+        I0 = double(rgb2gray(handles.current_image))/255;%double(rgb2gray(imread(handles.current_image)))/255;
     case 'Grayscale'
-        I0 = double(imread(handles.current_image))/255;
+        I0 = double(imreadhandles.current_image)/255;%double(imread(handles.current_image))/255;
 end
 
 handles.i = 0;
@@ -380,39 +387,29 @@ handles.profilenumber = 0;
 handles.plots = [];
 guidata(hObject, handles);
 
-% [Gmag,Gdir,RGB] = mat2(I0);
-% imshow(Gmag)
-% imwrite(Gmag,'C2Grad3.png');
-% return
-
-% p = [123; 59];
-% q = [41; 76];
-
-% p = [141; 43];
-% q = [50; 140];
 p = handles.p;
 q = handles.q;
-% I = repmat(I0,[1 1 3]);
-% I(p(1),p(2),1) = 1;
-% I(p(1),p(2),2:3) = 0;
-% I(q(1),q(2),1) = 1;
-% I(q(1),q(2),2:3) = 0;
-% imshow(I)
-% return
 
 d = norm(q-p);
 v = (q-p)/d;
 
-% figure(1)
-% figure(2)
-
-I = repmat(I0,[1 1 3]);     %RGB
+I = repmat(I0,[1 1 3]);    
 
 sigma0 = Inf;
-sigmas = [];
+handles.textoutput = strcat(handles.textoutput,sprintf('\n%s\n%s\n%s\n','Mode: Run Till End'));
+
 for i = 0:2:1.2*d
     r0 = p+i*v;
     r = round(r0);
+    if r(2)>handles.imageheight
+        r(2) = handles.imageheight;
+    end
+    if r(1)<1
+        r(1) = 1;
+    end
+    if r(2)<1
+        r(2) = 1;
+    end
     I(r(1),r(2),1) = 1;
     I(r(1),r(2),2:3) = 0;
     m = [];
@@ -428,9 +425,15 @@ for i = 0:2:1.2*d
         if s(2)>handles.imageheight
             s(2) = handles.imageheight;
         end
+        if s(1)<1
+            s(1) = 1;
+        end
+        if s(2)<1
+            s(2) = 1;
+        end
+        
         I(s(1),s(2),1) = 1;
         I(s(1),s(2),2:3) = 0;
-        % m = [m mean(mean(I0(s(1)-1:s(1)+1,s(2)-1:s(2)+1)))];
         m = [m I0(s(1),s(2))];
     end
     if i==0
@@ -438,19 +441,13 @@ for i = 0:2:1.2*d
         axes(handles.axes3);
         plot(m);
     end
-    %     figure(1)
-    %     imshow(I)
-    
-    %plot(m);
-    %hold on
-    %pause
+
     if i == 0
         if handles.choosesigma==false
+            sigmas = [];
             for sigma = 0.25:5
                 m = conv(m,fspecial('gaussian',[1 4*sigma],sigma),'same');
-                %plot(m);
-                %hold on
-                %pause
+                
                 a = round((handles.profilewidth - 11)/2) + 1;
                 b = a + 10;
                 mIn = m(a:b); % middle 11 pixels
@@ -461,110 +458,22 @@ for i = 0:2:1.2*d
                     plot(mConv);
                     pause
                 end
-                %             figure(2)
-                %             plot(m,'r'), hold on
-                %             plot(mConv,'g')
-                %             for j = 1:length(pks)
-                %                 plot(lcs(j),pks(j),'ko')
-                %             end
-                %             hold off
-                %             legend('original', 'convolved')
-                %             title(sprintf('defining sigma = %f',sigma))
-                %             pause
+
                 if length(pks) == 1
-                    disp(sigma);
                     sigmas = [sigmas sigma];
-                    %sigma0 = sigma;
-                    set(handles.text17, 'String', num2str(sigma));
-                    %break
                 end
             end
-            if sigma0==Inf
-                h = msgbox('sigma0 not found');
-                return
+            if handles.debugmode==true
+                close(figure(1))
+                handles.textoutput = strcat(handles.textoutput,sprintf('%s%s%s\n', 'Sigmas: [',num2str(sigmas),']'));
             end
-            disp(sigmas);
             if size(sigmas)>0
-                sigma0 = sigmas(1)
+                sigma0 = sigmas(1);
+                handles.sigma0 = sigma0;
+                guidata(hObject,handles);
+                set(handles.text17, 'String', num2str(sigma0));
             else 
                 sigma0 = Inf;
-            end
-        else
-            sigma0 = handles.customsigma0;
-            m = conv(m,fspecial('gaussian',[1 4*sigma0],sigma0),'same');
-            a = round((handles.profilewidth - 11)/2) + 1;
-            b = a + 10;
-            mIn = m(a:b);
-            mConv = conv2(m,mIn,'same');
-        end
-    else
-        m = conv(m,fspecial('gaussian',[1 4*sigma0],sigma0),'same');
-        mConv = conv2(m,mIn,'same');
-        %         figure(2)
-        %         plot(m,'r'), hold on
-        %         plot(mConv,'g'), hold off
-        %         legend('original', 'convolved')
-        %         title('moving on')
-        [pks,lcs] = findpeaks(mConv);
-        if length(pks) > 1
-            break
-        end
-        %         pause
-    end
-end
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%{
-for i = 1:2:1.2*d
-    r0 = p-i*v;
-    r = round(r0);
-    I(r(1),r(2),1) = 1;
-    I(r(1),r(2),2:3) = 0;
-    m = [];
-    start = -fix(handles.profilewidth/2);
-    finish = fix((handles.profilewidth - 1)/2);
-    for j = start:finish
-        s0 = r0+j*[-v(2); v(1)];
-        s = round(s0);
-        I(s(1),s(2),1) = 1;
-        I(s(1),s(2),2:3) = 0;
-        % m = [m mean(mean(I0(s(1)-1:s(1)+1,s(2)-1:s(2)+1)))];
-        m = [m I0(s(1),s(2))];
-    end
-    %     figure(1)
-    %     imshow(I)
-    
-    %plot(m);
-    %hold on
-    %pause
-    if i == 0
-        if handles.choosesigma==false
-            for sigma = 0.25:3
-                m = conv(m,fspecial('gaussian',[1 4*sigma],sigma),'same');
-                %plot(m);
-                %hold on
-                %pause
-                a = round((handles.profilewidth - 11)/2) + 1;
-                b = a + 10;
-                mIn = m(a:b); % middle 11 pixels
-                mConv = conv2(m,mIn,'same');
-                [pks,lcs] = findpeaks(mConv);
-                %             figure(2)
-                %             plot(m,'r'), hold on
-                %             plot(mConv,'g')
-                %             for j = 1:length(pks)
-                %                 plot(lcs(j),pks(j),'ko')
-                %             end
-                %             hold off
-                %             legend('original', 'convolved')
-                %             title(sprintf('defining sigma = %f',sigma))
-                %             pause
-                if length(pks) == 1
-                    sigma0 = sigma;
-                    set(handles.text17, 'String', num2str(sigma));
-                    break
-                end
-            end
-            if sigma0==Inf
                 h = msgbox('sigma0 not found');
                 return
             end
@@ -575,29 +484,22 @@ for i = 1:2:1.2*d
             b = a + 10;
             mIn = m(a:b);
             mConv = conv2(m,mIn,'same');
-            guidata(hObject, handles);
         end
+        handles.sigma0 = sigma0;
+        guidata(hObject,handles);
     else
         m = conv(m,fspecial('gaussian',[1 4*sigma0],sigma0),'same');
         mConv = conv2(m,mIn,'same');
-        %         figure(2)
-        %         plot(m,'r'), hold on
-        %         plot(mConv,'g'), hold off
-        %         legend('original', 'convolved')
-        %         title('moving on')
+
         [pks,lcs] = findpeaks(mConv);
         if length(pks) > 1
             break
         end
-        %         pause
     end
 end
-%}
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-
 ln = norm(r-p);
-handles.textoutput = strcat(handles.textoutput,sprintf('\n%s\n%s', 'Mode: Run Till End','Line length: '),num2str(ln),' pixels');
+handles.textoutput = strcat(handles.textoutput,sprintf('\n%s\n','Line length: '),num2str(ln),' pixels');
+guidata(hObject,handles);
 set(handles.edit9,'String',handles.textoutput);
 axes(handles.axes1);
 imshow(I)
@@ -609,21 +511,9 @@ function pushbutton3_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
-% p = [123; 59];
-% q = [41; 76];
-
-% p = [141; 43];
-% q = [50; 140];
 handles.profilenumber = handles.profilenumber + 1;
 p = handles.p;
 q = handles.q;
-% I = repmat(I0,[1 1 3]);
-% I(p(1),p(2),1) = 1;
-% I(p(1),p(2),2:3) = 0;
-% I(q(1),q(2),1) = 1;
-% I(q(1),q(2),2:3) = 0;
-% imshow(I)
-% return
 
 d = norm(q-p);
 v = (q-p)/d;
@@ -635,32 +525,29 @@ if handles.endofline==true
     handles.endofline=false;
 end
 
-
-% magnitudes and tangents
-
 switch handles.image_type
     case 'RGB'
-        I0 = double(rgb2gray(imread(handles.current_image)))/255;
+        I0 = double(rgb2gray(handles.current_image))/255;%double(rgb2gray(imread(handles.current_image)))/255;
     case 'Grayscale'
-        I0 = double(imread(handles.current_image))/255;
+        I0 = double(imread(handles.current_image))/255;%double(imread(handles.current_image))/255;
 end
 
-% [Gmag,Gdir,RGB] = mat2(I0);
-% imshow(Gmag)
-% imwrite(Gmag,'C2Grad3.png');
-% return
-
-
-% figure(1)
-% figure(2)
 if handles.i==0
-    handles.I = repmat(I0,[1 1 3]);     %RGB
+    handles.I = repmat(I0,[1 1 3]);
     guidata(hObject, handles);
 end
 
-%for i = 0:2:1.2*d
 r0 = p+handles.i*v;
 r = round(r0);
+if r(2)>handles.imageheight
+    r(2) = handles.imageheight;
+end
+if r(1)<1
+    r(1) = 1;
+end
+if r(2)<1
+    r(2) = 1;
+end
 handles.I(r(1),r(2),1) = 1;
 handles.I(r(1),r(2),2:3) = 0;
 m = [];
@@ -669,55 +556,58 @@ finish = fix((handles.profilewidth - 1)/2);
 for j = start:finish
     s0 = r0+j*[-v(2); v(1)];
     s = round(s0);
+    if s(2)>handles.imageheight
+        s(2) = handles.imageheight;
+    end
+    if s(1)<1
+        s(1) = 1;
+    end
+    if s(2)<1
+        s(2) = 1;
+    end
     handles.I(s(1),s(2),1) = 1;
     handles.I(s(1),s(2),2:3) = 0;
-    % m = [m mean(mean(I0(s(1)-1:s(1)+1,s(2)-1:s(2)+1)))];
     m = [m I0(s(1),s(2))];
 end
-%     figure(1)
-%     imshow(I)
+
 if handles.i==0
     handles.firstm = m;
     axes(handles.axes3);
     plot(m);
 end
-if handles.i == 0
-    handles.textoutput = strcat(handles.textoutput,sprintf('%s\n%s\n%s\n','Mode: Step Mode','Step 1','Line length: 0 pixels'));
+if handles.i==0
+    handles.textoutput = strcat(handles.textoutput,sprintf('\n%s\n%s\n%s\n','Mode: Step Mode','Step 1','Line length: 0 pixels'));
     if handles.choosesigma==false
+        sigmas = [];
         for sigma = 0.25:5
             m = conv(m,fspecial('gaussian',[1 4*sigma],sigma),'same');
-            %plot(m);
-            %hold on
-            %pause
             a = round((handles.profilewidth - 11)/2) + 1;
             b = a + 10;
             handles.mIn = m(a:b);
             handles.mConv = conv2(m,handles.mIn,'same');
-            figure(1)
-            plot(handles.mConv);
-            pause
             [pks,lcs] = findpeaks(handles.mConv);
-            %             figure(2)
-            %             plot(m,'r'), hold on
-            %             plot(mConv,'g')
-            %             for j = 1:length(pks)
-            %                 plot(lcs(j),pks(j),'ko')
-            %             end
-            %             hold off
-            %             legend('original', 'convolved')
-            %             title(sprintf('defining sigma = %f',sigma))
-            %             pause
+            if handles.debugmode==true
+                figure(1)
+                plot(handles.mConv);
+                pause
+            end
             if length(pks)==1
-                handles.sigma0 = sigma;
-                set(handles.text17, 'String', num2str(sigma));
-                guidata(hObject, handles);
-                break
+                sigmas = [sigmas sigma];
             end
         end
-        if handles.sigma0==Inf
+        if handles.debugmode==true
+            close(figure(1))
+            handles.textoutput = strcat(handles.textoutput,sprintf('\n%s%s%s\n', 'Sigmas: [',num2str(sigmas),']'));
+        end
+        if size(sigmas)>0
+            handles.sigma0 = sigmas(1);
+            set(handles.text17, 'String', num2str(handles.sigma0));
+        else 
+            handles.sigma0 = Inf;
             h = msgbox('sigma0 not found');
             return
         end
+        
     else
         handles.sigma0 = handles.customsigma0;
         m = conv(m,fspecial('gaussian',[1 4*handles.sigma0],handles.sigma0),'same');
@@ -732,19 +622,13 @@ else
     handles.textoutput = strcat(handles.textoutput,sprintf('\n%s\n%s\n%s\n','Mode: Step Mode',strcat('Step ', num2str(handles.i+1)),strcat('Line length:',num2str(ln),' pixels')));
     m = conv(m,fspecial('gaussian',[1 4*handles.sigma0],handles.sigma0),'same');
     handles.mConv = conv2(m,handles.mIn,'same');
-    %         figure(2)
-    %         plot(m,'r'), hold on
-    %         plot(mConv,'g'), hold off
-    %         legend('original', 'convolved')
-    %         title('moving on')
 
     [pks,lcs] = findpeaks(handles.mConv);
     if length(pks) > 1
         handles.endofline = true;
     end
-    %         pause
 end
-%end
+
 set(handles.edit9,'String',handles.textoutput);
 set(handles.text14, 'String', num2str(handles.i + 1));
 handles.i = handles.i + handles.interval;
@@ -854,10 +738,10 @@ if handles.lineselection==true
         guidata(src, handles);
     else 
         handles.q(2) = round(cursorPoint(1,1));
-        set(handles.edit3, 'string', num2str(handles.q(2)));
+        set(handles.edit4, 'string', num2str(handles.q(2)));
 
         handles.q(1) = round(cursorPoint(1,2));
-        set(handles.edit1, 'string', num2str(handles.q(1)));
+        set(handles.edit2, 'string', num2str(handles.q(1)));
 
         % Reset step through values
         handles.i = 0;
@@ -1002,8 +886,7 @@ if get(hObject,'Value')==1
 else
     handles.debugmode = false;
 end
-guidata(hObject,handles)
-    
+guidata(hObject,handles);
 
 
 % --- Executes on button press in pushbutton8.
@@ -1012,12 +895,213 @@ function pushbutton8_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 handles.folder = uigetdir;
-disp(handles.folder)
-images = dir(handles.folder);
-images = images([images.isdir] & ~strncmpi('.', {images.name}, 1));
-imagenames = [];
-disp(size(images))
-for i=1:size(images,1)
-    imagenames = [imagenames images.name(i)];
+guidata(hObject, handles);
+
+
+% --- Executes on button press in pushbutton9.
+function pushbutton9_Callback(hObject, eventdata, handles)
+% hObject    handle to pushbutton9 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+files = dir(handles.folder);
+files = files(~[files.isdir] & ~strncmpi('.', {files.name}, 1));
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+input = '';
+y = regexp({files.name},'txt');
+for i=1:size(y,2)
+    z = y(i);
+    if ~isempty(z{1})
+        input = files(i).name;
+        break;
+    end
 end
-disp(imagenames)
+resultsfolder = strcat(handles.folder,'_results');
+mkdir(resultsfolder);
+
+report = strcat(resultsfolder, '/report.txt');
+rid = fopen(report,'wt');
+fprintf(rid,'%15s    %5s   %11s    %9s    %11s    %13s\n','Image Name','Sigma','Start Point','End Point','Line Length','Profile Width');
+
+filename = strcat(handles.folder,'/',input);
+fid = fopen(filename, 'r');
+
+p = [0;0];
+q = [0;0];
+while ~feof(fid)
+    current_line = fgetl(fid);
+    while strncmpi('#',current_line, 1)
+        current_line = fgetl(fid);
+    end
+    current_cfig = textscan(current_line,'%s %s %d %d %d %d %s %s',1,'CommentStyle',{'/*', '*/'});
+    image_name = current_cfig{1}{1};
+    image_name = strcat(handles.folder,'/',image_name);
+    image_type = current_cfig{2}{1};
+    p(2) = current_cfig{3};
+    p(1) = current_cfig{4};
+    q(2) = current_cfig{5};
+    q(1) = current_cfig{6};
+    if strcmp(current_cfig{7}{1},'default')
+        profilewidth = 15;
+    else
+        profilewidth = str2double(current_cfig{7}{1});
+    end
+    current_sigma0 = current_cfig{8}{1};
+    
+    current_image = imread(image_name);
+    current_image = imresize(current_image,[256 256]);
+    switch image_type
+        case 'RGB'
+            I0 = double(rgb2gray(current_image))/255;%double(rgb2gray(imread(current_image)))/255;
+        case 'Grayscale'
+            I0 = double(current_image)/255;%double(imread(current_image))/255;
+    end
+    
+%     handles.i = 0;
+%     handles.profilenumber = 0;
+%     handles.plots = [];
+%     guidata(hObject, handles);
+    d = norm(q-p);
+    v = (q-p)/d;
+%     if any(ISNAN(v))
+%         fprintf(rid,'%10s    %5s   %11.2f    %13d\n',current_cfig{1}{1},'-',0,profilewidth);
+%         continue
+%     end
+    
+    I = repmat(I0,[1 1 3]);     %RGB
+    
+    sigma0 = Inf;
+    sigmas = [];
+    for i = 0:2:1.2*d
+        r0 = p+i*v;
+        r = round(r0);
+        if r(1)>handles.imagewidth
+            r(1) = handles.imagewidth;
+        end
+        if r(2)>handles.imageheight
+            r(2) = handles.imageheight;
+        end
+        if r(1)<1
+            r(1) = 1;
+        end
+        I(r(1),r(2),1) = 1; 
+        I(r(1),r(2),2:3) = 0;
+        m = [];
+        start = -fix(profilewidth/2);
+        finish = fix((profilewidth - 1)/2);
+        for j = start:finish
+            s0 = r0+j*[-v(2); v(1)];
+            s = round(s0);
+            
+            if s(1)>handles.imagewidth
+                s(1) = handles.imagewidth;
+            end
+            if s(2)>handles.imageheight
+                s(2) = handles.imageheight;
+            end
+            if s(1)<1
+                s(1) = 1;
+            end
+            if s(2)<1
+                s(2) = 1;
+            end
+            I(s(1),s(2),1) = 1;
+            I(s(1),s(2),2:3) = 0;
+            m = [m I0(s(1),s(2))];
+        end
+%         if i==0
+%             handles.firstm = m;
+%             axes(handles.axes3);
+%             plot(m);
+%         end
+        if i == 0
+            if strcmp(current_sigma0,'auto')
+                for sigma = 0.25:5
+                    m = conv(m,fspecial('gaussian',[1 4*sigma],sigma),'same');
+                    a = round((profilewidth - 11)/2) + 1;
+                    b = a + 10;
+                    mIn = m(a:b); % middle 11 pixels
+                    mConv = conv2(m,mIn,'same');
+                    [pks,lcs] = findpeaks(mConv);
+                    if length(pks) == 1
+                        sigmas = [sigmas sigma];
+                        %sigma0 = sigma;
+                        %break
+                    end
+                end
+
+                if size(sigmas)>0
+                    sigma0 = sigmas(1);
+                else
+                    sigma0 = Inf;
+                end
+                if sigma0==Inf
+                    h = msgbox('sigma0 not found');
+                    return
+                end
+            else
+                sigma0 = str2double(current_sigma0);
+                m = conv(m,fspecial('gaussian',[1 4*sigma0],sigma0),'same');
+                a = round((profilewidth - 11)/2) + 1;
+                b = a + 10;
+                mIn = m(a:b);
+                mConv = conv2(m,mIn,'same');
+            end
+        else
+            m = conv(m,fspecial('gaussian',[1 4*sigma0],sigma0),'same');
+            mConv = conv2(m,mIn,'same');
+            [pks,lcs] = findpeaks(mConv);
+            if length(pks) > 1
+                break
+            end
+        end
+    end
+    ln = norm(r-p);
+    initial = strcat(num2str(p(2)),',',num2str(p(1)));
+    final = strcat(num2str(r(2)),',',num2str(r(1)));
+    fprintf(rid,'%15s    %5.2f   %11s    %9s    %11.2f    %13d\n',current_cfig{1}{1},sigma0,initial,final,ln,profilewidth);
+end
+fclose('all');
+
+
+% --- Executes on button press in pushbutton10.
+function pushbutton10_Callback(hObject, eventdata, handles)
+% hObject    handle to pushbutton10 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+current_folder = pwd;
+cfig_file = strcat(pwd,'/SavedConfigurations.txt');
+cid = fopen(cfig_file,'at');
+if handles.choosesigma==true
+    auto = ' ';
+else
+    auto = 'x';
+end
+initial = strcat(num2str(handles.p(2)),',',num2str(handles.p(1)));
+final = strcat(num2str(handles.q(2)),',',num2str(handles.q(1)));
+fprintf(cid,'%20s    %5.2f   %11s    %9s    %11s    %13d    %50s\n',handles.image_name,handles.sigma0,initial,final,auto,handles.profilewidth,handles.notes);
+fclose(cid);
+
+
+
+function edit10_Callback(hObject, eventdata, handles)
+% hObject    handle to edit10 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of edit10 as text
+%        str2double(get(hObject,'String')) returns contents of edit10 as a double
+handles.notes = get(hObject,'String');
+guidata(hObject,handles);
+
+
+% --- Executes during object creation, after setting all properties.
+function edit10_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to edit10 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end

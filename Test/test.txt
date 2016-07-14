@@ -1,0 +1,7 @@
+Image.png RGB 40 150 150 40 15 1.25
+# This is a comment line
+Image.jpg RGB 71 20 76 180 default auto
+C2Grad3.png Grayscale 118 173 232 171 default auto
+C2Grad2.png Grayscale 115 17 33 80 default auto
+C2Grad.png Grayscale 100 214 200 214 default auto
+C2.png Grayscale 100 214 200 214 default auto

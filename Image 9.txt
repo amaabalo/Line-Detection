@@ -1,6 +1,8 @@
-B.png
-Grayscale
-0
-0
-0
-0
+Image.png
+RGB
+40
+150
+150
+40
+default
+auto

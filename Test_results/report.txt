@@ -1,0 +1,7 @@
+     Image Name    Sigma   Start Point    End Point    Line Length    Profile Width
+      Image.png     1.25        40,150       101,89          86.27               15
+      Image.jpg     0.25         71,20       77,212         192.09               15
+    C2Grad3.png     1.25       118,173      254,171         136.01               15
+    C2Grad2.png     0.25        115,17        17,93         124.02               15
+     C2Grad.png     2.25       100,214      220,214         120.00               15
+         C2.png     0.25       100,214      220,214         120.00               15
